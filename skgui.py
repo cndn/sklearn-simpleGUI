@@ -1,17 +1,15 @@
 """
 =====================
 Simple GUI of sklearn
+
+Author: DN <zjudn2013@gmail.com>
+
+License: MIT License
 =====================
 
 """
-from __future__ import division
 
 print(__doc__)
-
-# Author: Peter Prettenhoer <peter.prettenhofer@gmail.com>
-#
-# License: BSD 3 clause
-
 import matplotlib
 matplotlib.use('TkAgg')
 
