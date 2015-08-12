@@ -63,11 +63,11 @@ class Model(object):
     
 
 class Model_SVM(object):
-    def __init__(self,model,parameter = {"kernel" :"rbf", "C" : 5}):
+    def __init__(self,model,parameter = {"kernel" :"rbf", "C" : 5, "gamma": 1, "poly degree": 3}):
         self.train = model.train
         self.test = model.test
         self.CVsize = model.CVsize
-        self.clf = SVC(kernel=parameter["kernel"], C=parameter["C"])
+        self.clf = SVC(kernel=parameter["kernel"].get(), C = float(parameter["C"].get()), gamma = float(parameter["gamma"].get()))
 
     def fit(self):
         train = np.array(self.train)
@@ -88,7 +88,7 @@ class Model_Adaboost(object):
         self.train = model.train
         self.test = model.test
         self.CVsize = model.CVsize
-        self.clf = AdaBoostClassifier(n_estimators = parameter["n_estimators"])
+        self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
 
     def fit(self):
         train = np.array(self.train)
@@ -130,7 +130,7 @@ class Model_KNN(object):
         self.train = model.train
         self.test = model.test
         self.CVsize = model.CVsize
-        self.clf = KNeighborsClassifier(parameter["K"])
+        self.clf = KNeighborsClassifier(int(parameter["K"].get()))
 
     def fit(self):
         train = np.array(self.train)
@@ -151,37 +151,84 @@ class Controller(object):
         self.model = model
         self.modelType = Tk.IntVar()
         self.parameter = {}
+        self.frame = Tk.Frame(master = Tk.Toplevel()).grid(row = 1,column = 1)
+        self.isShown = False
+
+    def showFrameHelper(self):
+        if self.isShown == False:
+            self.isShown = True
+            self.showFrame()
+        else:
+            self.param_group.pack_forget()
+            self.showFrame()
+
     def showFrame(self):
-        frame = Tk.Frame(width=100,height=100,bg="")
-        frame.tkraise()
+        
+        if self.modelType.get() == 0:
+            
+            self.parameter["kernel"] = Tk.StringVar()
+            self.parameter["C"] = Tk.StringVar()
+            self.parameter["gamma"] = Tk.StringVar()
+            self.parameter["degree"] = Tk.StringVar()
+            self.param_group = Tk.Frame(self.frame)
+            Tk.Radiobutton(self.param_group, text="linear", variable=self.parameter["kernel"],
+                           value="linear").pack(anchor=Tk.W)
+            Tk.Radiobutton(self.param_group, text="rbf", variable=self.parameter["kernel"],
+                           value="rbf").pack(anchor=Tk.W)
+            Tk.Radiobutton(self.param_group, text="poly", variable=self.parameter["kernel"],
+                           value="poly").pack(anchor=Tk.W)
+            Tk.Label(self.param_group, text = "C").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["C"]).pack()
+            Tk.Label(self.param_group, text = "gamma").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["gamma"]).pack()
+            Tk.Label(self.param_group, text = "degree").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["degree"]).pack()
+            self.param_group.pack(side=Tk.LEFT)
+
+        if self.modelType.get() == 1:
+
+            self.parameter["n_estimators"] = Tk.StringVar()
+            self.param_group = Tk.Frame(self.frame)
+            Tk.Label(self.param_group, text = "n_estimators").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["n_estimators"]).pack()
+            self.param_group.pack(side=Tk.LEFT)
+
+        if self.modelType.get() == 2:
+
+            self.parameter["n_estimators"] = Tk.StringVar()
+            self.parameter["max_depth"] = Tk.StringVar()
+            self.parameter["max_features"] = Tk.StringVar()
+            self.param_group = Tk.Frame(self.frame)
+            Tk.Label(self.param_group, text = "n_estimators").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["n_estimators"]).pack()
+            Tk.Label(self.param_group, text = "max_depth").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["max_depth"]).pack()
+            Tk.Label(self.param_group, text = "max_features").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["max_features"]).pack()
+            self.param_group.pack(side=Tk.LEFT)
+
+        if self.modelType.get() == 3:
+            self.parameter["K"] = Tk.StringVar()
+            self.param_group = Tk.Frame(self.frame)
+            Tk.Label(self.param_group, text = "K").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["K"]).pack()
+            self.param_group.pack(side=Tk.LEFT)
 
     def fit(self):
-        model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest"}
+        model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest", 3:"KNN"}
         # output_map = {0:"0/1 classification", 1:"probability", 2:"regression"}
         print(self.modelType.get())
         if self.modelType.get() == 0:
-            if self.parameter != {}:
-                self.model = Model_SVM(self.model,self.parameter)
-            else:
-                self.model = Model_SVM(self.model)
+            self.model = Model_SVM(self.model,self.parameter)
 
         elif self.modelType.get() == 1:
-            if self.parameter != {}:
-                self.model = Model_Adaboost(self.model,self.parameter)
-            else:
-                self.model = Model_Adaboost(self.model)
+            self.model = Model_Adaboost(self.model,self.parameter)
             
         elif self.modelType.get() == 2:
-            if self.parameter != {}:
-                self.model = Model_RF(self.model,self.parameter)
-            else:
-                self.model = Model_RF(self.model)
+            self.model = Model_RF(self.model,self.parameter)
 
         elif self.modelType.get() == 3:
-            if self.parameter != {}:
-                self.model = Model_KNN(self.model,self.parameter)
-            else:
-                self.model = Model_KNN(self.model)
+            self.model = Model_KNN(self.model,self.parameter)
         self.model.fit()
         self.model.score()
 
@@ -210,7 +257,7 @@ class Controller(object):
         print("Shape: " + str(self.model.test.shape))
 
 class View(object):
-    """Test docstring. """
+
     def __init__(self, root, controller):
         f = Figure()
         self.controllbar = ControllBar(root, controller)
@@ -244,13 +291,13 @@ class ControllBar(object):
         # self.box.bind("SVM",controller.showFrame)
         # self.box.pack()
         Tk.Radiobutton(model_group, text="SVM(0/1)", variable=controller.modelType,
-                       value=0,command = controller.showFrame).pack(anchor=Tk.W)
+                       value=0,command = controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="Adaboost(0/1)", variable=controller.modelType,
-                       value=1).pack(anchor=Tk.W)
+                       value=1,command = controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="Random Forest(0/1)", variable=controller.modelType,
-                       value=2).pack(anchor=Tk.W)
+                       value=2,command = controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="KNN(0/1)", variable=controller.modelType,
-                       value=3).pack(anchor=Tk.W)
+                       value=3,command = controller.showFrameHelper).pack(anchor=Tk.W)
         model_group.pack(side=Tk.LEFT)
 
         # output_group = Tk.Frame(fm)
