@@ -1,2 +1,2 @@
 # sklearn-simpleGUI
-simple GUI of sklearn for lazy me(under construction)
+simple GUI of sklearn (under construction)
