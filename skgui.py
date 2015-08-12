@@ -54,7 +54,7 @@ class Model(object):
     def __init__(self):
         self.train = []
         self.test = []
-        self.CVsize = 0.2
+        self.CVsize = Tk.StringVar()
         self.clf = None
 
     def fit(self):
@@ -63,31 +63,39 @@ class Model(object):
     
 
 class Model_SVM(object):
-    def __init__(self,model,parameter = {"kernel" :"rbf", "C" : 5, "gamma": 1, "poly degree": 3}):
+    def __init__(self,model,parameter = {"kernel" :"rbf", "C" : 5, "gamma": 1, "poly degree": 3, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
-        self.CVsize = model.CVsize
+        self.CVsize = float(parameter["CV_size"].get())
         self.clf = SVC(kernel=parameter["kernel"].get(), C = float(parameter["C"].get()), gamma = float(parameter["gamma"].get()))
+        self.model = model
+
 
     def fit(self):
+
         train = np.array(self.train)
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
         self.clf.fit(self.X_train,self.y_train)
-        print("fitted")
 
     def score(self):
         pre = self.clf.predict(self.X_train)
         truth = self.y_train
-        print ("score: " + str(self.clf.score(self.X_train,truth)))
-        print ("f1: " + str(f1_score(truth,pre, average=None)))
-        print ("AUC score: " + str(roc_auc_score(truth,pre)))
+        print ("score on training set: " + str(self.clf.score(self.X_train,truth)))
+        print ("f1 on training set: " + str(f1_score(truth,pre, average=None)))
+        print ("AUC score on training set: " + str(roc_auc_score(truth,pre)))
+        if self.CVsize != 0:
+            pre = self.clf.predict(self.X_CV)
+            truth = self.y_CV
+            print ("score on Cross Validation set: " + str(self.clf.score(self.X_CV,truth)))
+            print ("f1 on Cross Validation set: " + str(f1_score(truth,pre, average=None)))
+            print ("AUC score on Cross Validation set: " + str(roc_auc_score(truth,pre)))
 
 class Model_Adaboost(object):
-    def __init__(self,model,parameter = {"n_estimators" : 50}):
+    def __init__(self,model,parameter = {"n_estimators" : 50, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
-        self.CVsize = model.CVsize
         self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
 
     def fit(self):
@@ -105,10 +113,9 @@ class Model_Adaboost(object):
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
 
 class Model_RF(object):
-    def __init__(self,model,parameter = {"n_estimators" :30, "max_depth" :5, "max_features":10}):
+    def __init__(self,model,parameter = {"n_estimators" :30, "max_depth" :5, "max_features":10, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
-        self.CVsize = model.CVsize
         self.clf = RandomForestClassifier(max_depth= 5, n_estimators=30, max_features=min(10,model.train.shape[1] - 1))
 
     def fit(self):
@@ -129,7 +136,6 @@ class Model_KNN(object):
     def __init__(self,model,parameter = {"K":5}):
         self.train = model.train
         self.test = model.test
-        self.CVsize = model.CVsize
         self.clf = KNeighborsClassifier(int(parameter["K"].get()))
 
     def fit(self):
@@ -151,8 +157,9 @@ class Controller(object):
         self.model = model
         self.modelType = Tk.IntVar()
         self.parameter = {}
-        self.frame = Tk.Frame(master = Tk.Toplevel()).grid(row = 1,column = 1)
         self.isShown = False
+        self.frame = Tk.Toplevel()
+        self.frame.wm_title("Parameter")
 
     def showFrameHelper(self):
         if self.isShown == False:
@@ -164,6 +171,7 @@ class Controller(object):
 
     def showFrame(self):
         
+        self.parameter["CV_size"] = Tk.StringVar()
         if self.modelType.get() == 0:
             
             self.parameter["kernel"] = Tk.StringVar()
@@ -183,7 +191,7 @@ class Controller(object):
             Tk.Entry(self.param_group, textvariable = self.parameter["gamma"]).pack()
             Tk.Label(self.param_group, text = "degree").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["degree"]).pack()
-            self.param_group.pack(side=Tk.LEFT)
+            
 
         if self.modelType.get() == 1:
 
@@ -191,7 +199,7 @@ class Controller(object):
             self.param_group = Tk.Frame(self.frame)
             Tk.Label(self.param_group, text = "n_estimators").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["n_estimators"]).pack()
-            self.param_group.pack(side=Tk.LEFT)
+            
 
         if self.modelType.get() == 2:
 
@@ -205,14 +213,19 @@ class Controller(object):
             Tk.Entry(self.param_group, textvariable = self.parameter["max_depth"]).pack()
             Tk.Label(self.param_group, text = "max_features").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["max_features"]).pack()
-            self.param_group.pack(side=Tk.LEFT)
+            
 
         if self.modelType.get() == 3:
             self.parameter["K"] = Tk.StringVar()
             self.param_group = Tk.Frame(self.frame)
             Tk.Label(self.param_group, text = "K").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["K"]).pack()
-            self.param_group.pack(side=Tk.LEFT)
+
+        
+        Tk.Label(self.param_group, text = "Cross Validation Size").pack()
+        Tk.Label(self.param_group, text = "Set it to 0 if no need").pack()
+        Tk.Entry(self.param_group, textvariable = self.parameter["CV_size"]).pack()
+        self.param_group.pack(side=Tk.LEFT)
 
     def fit(self):
         model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest", 3:"KNN"}
@@ -261,10 +274,8 @@ class View(object):
     def __init__(self, root, controller):
         f = Figure()
         self.controllbar = ControllBar(root, controller)
-        self.f = f
-        self.controller = controller
-        self.contours = []
-        self.c_labels = None
+        # self.f = f
+        # self.controller = controller
 
 
 
@@ -285,6 +296,9 @@ class ControllBar(object):
         Tk.Button(file_group, text="test",
                        command=controller.loadTestData).pack(anchor=Tk.W)
         file_group.pack(side=Tk.LEFT)
+
+
+        
 
         model_group = Tk.Frame(fm)
         # self.box = ttk.Combobox(model_group, textvariable = Tk.StringVar(), values = ["SVM","Adaboost"])
@@ -308,10 +322,14 @@ class ControllBar(object):
         # Tk.Radiobutton(output_group, text="Regression",
         #                variable=controller.model.output, value=2).pack(anchor=Tk.W)
         # output_group.pack(side=Tk.LEFT)
+        output_group = Tk.Frame(fm)
+        Tk.Button(output_group, text='Fit', width=5, command=controller.fit).pack()
+        Tk.Button(output_group, text='Save Results', width=10, command=controller.save_results).pack()
+        output_group.pack(side=Tk.LEFT)
 
-        Tk.Button(fm, text='Fit', width=5, command=controller.fit).pack()
-        Tk.Button(fm, text='Save Results', width=10, command=controller.save_results).pack()
         fm.pack(side=Tk.LEFT)
+
+
 
 
 
@@ -324,7 +342,6 @@ def main(argv):
     root.wm_title("Scikit-learn GUI")
     view = View(root, controller)
     Tk.mainloop()
-
 
 if __name__ == "__main__":
     main(sys.argv)
