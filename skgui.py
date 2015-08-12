@@ -30,6 +30,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.svm import SVR
+from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier,ExtraTreesClassifier,GradientBoostingClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -45,9 +46,6 @@ from sklearn.metrics import roc_auc_score
 
 
 class Model(object):
-    """
-    The model which holds the data
-    """
 
     def __init__(self):
         self.train = []
@@ -55,26 +53,25 @@ class Model(object):
         self.CVsize = Tk.StringVar()
         self.clf = None
 
-    def fit(self):
-        pass
-
     
 
 class Model_SVM(object):
+    # CV == 0, fit with the whole training set and display scores of all kind
+    # CV != 0, choose parameters
     def __init__(self,model,parameter = {"kernel" :"rbf", "C" : 5, "gamma": 1, "poly degree": 3, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
         self.CVsize = float(parameter["CV_size"].get())
-        self.clf = SVC(kernel=parameter["kernel"].get(), C = float(parameter["C"].get()), gamma = float(parameter["gamma"].get()))
-        self.model = model
-
-
-    def fit(self):
-
         train = np.array(self.train)
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
         self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        if self.CVsize == 0:#
+            self.clf = SVC(kernel=parameter["kernel"].get(), C = float(parameter["C"].get()), gamma = float(parameter["gamma"].get()))
+        self.model = model
+
+
+    def fit(self):
         self.clf.fit(self.X_train,self.y_train)
 
     def score(self):
@@ -83,25 +80,57 @@ class Model_SVM(object):
         print ("score on training set: " + str(self.clf.score(self.X_train,truth)))
         print ("f1 on training set: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score on training set: " + str(roc_auc_score(truth,pre)))
-        if self.CVsize != 0:
+
+    def crossValidation(self):
+        CList = [0.01,0.1,1,2,5,10]
+        gammaList = [0,0.1,0.5,1,2,5,10]
+        degreeList = range(10)
+        bestScore = [0,0] #score,C
+        bestF1ScoreNeg = [0,0]
+        bestF1ScorePos = [0,0]
+        #bestAUCScore = [0,0]
+        for C in CList:
+            self.clf = SVC(kernel="linear", C = C)
+            self.clf.fit(self.X_train,self.y_train)
             pre = self.clf.predict(self.X_CV)
             truth = self.y_CV
-            print ("score on Cross Validation set: " + str(self.clf.score(self.X_CV,truth)))
-            print ("f1 on Cross Validation set: " + str(f1_score(truth,pre, average=None)))
-            print ("AUC score on Cross Validation set: " + str(roc_auc_score(truth,pre)))
+            score = self.clf.score(self.X_CV,truth)
+            if score > bestScore[0]:
+                bestScore[0] = score
+                bestScore[1] = C
+
+            f1pos = f1_score(truth,pre, average=None)[1]
+            if f1pos > bestF1ScorePos[0]:
+                bestF1ScorePos[0] = f1pos
+                bestF1ScorePos[1] = C
+
+            f1neg = f1_score(truth,pre, average=None)[0]
+            if f1neg > bestF1ScoreNeg[0]:
+                bestF1ScoreNeg[0] = f1neg
+                bestF1ScoreNeg[1] = C
+
+        print ("For linear kernel:")
+        print ("Best [score,C] on Cross Validation set: " + str(bestScore))
+        print ("Best [f1(pos),C] on Cross Validation set: " + str(bestF1ScorePos))
+        print ("Best [f1(neg),C] on Cross Validation set" + str(bestF1ScoreNeg))
+
 
 class Model_Adaboost(object):
     def __init__(self,model,parameter = {"n_estimators" : 50, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
         self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
-
-    def fit(self):
+        self.CVsize = float(parameter["CV_size"].get())
         train = np.array(self.train)
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        if self.CVsize == 0:
+            self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
+        self.model = model
+
+    def fit(self):
         self.clf.fit(self.X_train,self.y_train)
-        print("fitted")
 
     def score(self):
         pre = self.clf.predict(self.X_train)
@@ -109,19 +138,54 @@ class Model_Adaboost(object):
         print ("score: " + str(self.clf.score(self.X_train,truth)))
         print ("f1: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
+
+    def crossValidation(self):
+        estimatorList = [3,5,7,10,13,15,20,25,30,50]
+        bestScore = [0,0] #score,n_estimator
+        bestF1ScoreNeg = [0,0]
+        bestF1ScorePos = [0,0]
+        #bestAUCScore = [0,0]
+        for e in estimatorList:
+            self.clf = AdaBoostClassifier(n_estimators = e)
+            self.clf.fit(self.X_train,self.y_train)
+            pre = self.clf.predict(self.X_CV)
+            truth = self.y_CV
+            score = self.clf.score(self.X_CV,truth)
+            if score > bestScore[0]:
+                bestScore[0] = score
+                bestScore[1] = e
+
+            f1pos = f1_score(truth,pre, average=None)[1]
+            if f1pos > bestF1ScorePos[0]:
+                bestF1ScorePos[0] = f1pos
+                bestF1ScorePos[1] = e
+
+            f1neg = f1_score(truth,pre, average=None)[0]
+            if f1neg > bestF1ScoreNeg[0]:
+                bestF1ScoreNeg[0] = f1neg
+                bestF1ScoreNeg[1] = e
+
+        print ("Adaboost:")
+        print ("Best [score,n_estimators] on Cross Validation set: " + str(bestScore))
+        print ("Best [f1(pos),n_estimators] on Cross Validation set: " + str(bestF1ScorePos))
+        print ("Best [f1(neg),n_estimators] on Cross Validation set" + str(bestF1ScoreNeg))
 
 class Model_RF(object):
     def __init__(self,model,parameter = {"n_estimators" :30, "max_depth" :5, "max_features":10, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
         self.clf = RandomForestClassifier(max_depth= 5, n_estimators=30, max_features=min(10,model.train.shape[1] - 1))
-
-    def fit(self):
+        self.CVsize = float(parameter["CV_size"].get())
         train = np.array(self.train)
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        if self.CVsize == 0:
+            self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
+        self.model = model
+    
+    def fit(self):
         self.clf.fit(self.X_train,self.y_train)
-        print("fitted")
 
     def score(self):
         pre = self.clf.predict(self.X_train)
@@ -129,19 +193,50 @@ class Model_RF(object):
         print ("score: " + str(self.clf.score(self.X_train,truth)))
         print ("f1: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
+
+    def crossValidation(self):
+        pass
+        # for  in CList:
+        #     self.clf = SVC(kernel="linear", C = C)
+        #     self.clf.fit(self.X_train,self.y_train)
+        #     pre = self.clf.predict(self.X_CV)
+        #     truth = self.y_CV
+        #     score = self.clf.score(self.X_CV,truth)
+        #     if score > bestScore[0]:
+        #         bestScore[0] = score
+        #         bestScore[1] = C
+
+        #     f1pos = f1_score(truth,pre, average=None)[1]
+        #     if f1pos > bestF1ScorePos[0]:
+        #         bestF1ScorePos[0] = f1pos
+        #         bestF1ScorePos[1] = C
+
+        #     f1neg = f1_score(truth,pre, average=None)[0]
+        #     if f1neg > bestF1ScoreNeg[0]:
+        #         bestF1ScoreNeg[0] = f1neg
+        #         bestF1ScoreNeg[1] = C
+
+        # print ("For linear kernel:")
+        # print ("Best [score,C] on Cross Validation set: " + str(bestScore))
+        # print ("Best [f1(pos),C] on Cross Validation set: " + str(bestF1ScorePos))
+        # print ("Best [f1(neg),C] on Cross Validation set" + str(bestF1ScoreNeg))
 
 class Model_KNN(object):
     def __init__(self,model,parameter = {"K":5}):
         self.train = model.train
         self.test = model.test
-        self.clf = KNeighborsClassifier(int(parameter["K"].get()))
-
-    def fit(self):
+        
+        self.CVsize = float(parameter["CV_size"].get())
         train = np.array(self.train)
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
+
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        if self.CVsize == 0:
+            self.clf = KNeighborsClassifier(int(parameter["K"].get()))
+        self.model = model
+    def fit(self):
         self.clf.fit(self.X_train,self.y_train)
-        print("fitted")
 
     def score(self):
         pre = self.clf.predict(self.X_train)
@@ -149,6 +244,83 @@ class Model_KNN(object):
         print ("score: " + str(self.clf.score(self.X_train,truth)))
         print ("f1: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
+
+    def crossValidation(self):
+        kList = [1,2,4,8,16,32,64,128,256]
+        bestScore = [0,0] #score,k
+        bestF1ScoreNeg = [0,0]
+        bestF1ScorePos = [0,0]
+        #bestAUCScore = [0,0]
+        for k in kList:
+            if k > self.X_train.shape[0]:
+                break
+            self.clf = KNeighborsClassifier(k)
+            self.clf.fit(self.X_train,self.y_train)
+            pre = self.clf.predict(self.X_CV)
+            truth = self.y_CV
+            score = self.clf.score(self.X_CV,truth)
+            if score > bestScore[0]:
+                bestScore[0] = score
+                bestScore[1] = k
+
+            f1pos = f1_score(truth,pre, average=None)[1]
+            if f1pos > bestF1ScorePos[0]:
+                bestF1ScorePos[0] = f1pos
+                bestF1ScorePos[1] = k
+
+            f1neg = f1_score(truth,pre, average=None)[0]
+            if f1neg > bestF1ScoreNeg[0]:
+                bestF1ScoreNeg[0] = f1neg
+                bestF1ScoreNeg[1] = k
+
+        print ("KNN:")
+        print ("Best [score,K] on Cross Validation set: " + str(bestScore))
+        print ("Best [f1(pos),K] on Cross Validation set: " + str(bestF1ScorePos))
+        print ("Best [f1(neg),K] on Cross Validation set" + str(bestF1ScoreNeg))
+
+class Model_LR(object):
+    def __init__(self,model,parameter = {"multi" : "ovr", "C": 1}):
+        self.train = model.train
+        self.test = model.test
+        self.CVsize = float(parameter["CV_size"].get())
+        train = np.array(self.train)
+        self.X_train = train[:, :-1]
+        self.y_train = train[:, -1]
+        self.multi = parameter["multi"].get()
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        if self.CVsize == 0:
+            if parameter["multi"].get() == "multinomial":
+                # works only for the 'lbfgs' solver
+                self.clf = LogisticRegression(C = float(parameter["C"].get()), multi_class = parameter["multi"].get(), solver = 'lbfgs')
+            else:
+                self.clf = LogisticRegression(C = float(parameter["C"].get()), multi_class = parameter["multi"].get())
+        self.model = model
+
+    def fit(self):
+        self.clf.fit(self.X_train,self.y_train)
+
+    def score(self):
+        pre = self.clf.predict(self.X_train)
+        truth = self.y_train
+        print ("score: " + str(self.clf.score(self.X_train,truth)))
+
+    def crossValidation(self):
+        CList = [0.01,0.05,0.1,0.5,1.0,2.0,5.0,10.0]
+        bestScore = [0,0] #score,C
+        for C in CList:
+            if self.multi == "multinomial":
+                # works only for the 'lbfgs' solver
+                self.clf = LogisticRegression(C = C, multi_class = self.multi, solver = 'lbfgs')
+            else:
+                self.clf = LogisticRegression(C = C, multi_class = self.multi)
+            self.clf.fit(self.X_train,self.y_train)
+            pre = self.clf.predict(self.X_CV)
+            truth = self.y_CV
+            score = self.clf.score(self.X_CV,truth)
+            if score > bestScore[0]:
+                bestScore[0] = score
+                bestScore[1] = C
+        print ("Best [score,C] on Cross Validation set: " + str(bestScore))
 
 class Controller(object):
     def __init__(self, model):
@@ -216,19 +388,35 @@ class Controller(object):
         if self.modelType.get() == 3:
             self.parameter["K"] = Tk.StringVar()
             self.param_group = Tk.Frame(self.frame)
+            
             Tk.Label(self.param_group, text = "K").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["K"]).pack()
 
+        if self.modelType.get() == 4:
+            self.parameter["C"] = Tk.StringVar()
+            self.parameter["multi"] = Tk.StringVar()
+            self.param_group = Tk.Frame(self.frame)
+            Tk.Radiobutton(self.param_group, text="one vs all", variable=self.parameter["multi"],
+                           value="ovr").pack(anchor=Tk.W)
+            Tk.Radiobutton(self.param_group, text="multinomial", variable=self.parameter["multi"],
+                           value="multinomial").pack(anchor=Tk.W)
+            
+            Tk.Label(self.param_group, text = "C").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["C"]).pack()
         
         Tk.Label(self.param_group, text = "Cross Validation Size").pack()
         Tk.Label(self.param_group, text = "Set it to 0 if no need").pack()
-        Tk.Entry(self.param_group, textvariable = self.parameter["CV_size"]).pack()
+        cvSizeEntry = Tk.Entry(self.param_group, textvariable = self.parameter["CV_size"])
+        cvSizeEntry.insert(0,0)
+        cvSizeEntry.pack()
         self.param_group.pack(side=Tk.LEFT)
 
+
+
     def fit(self):
-        model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest", 3:"KNN"}
+        model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest", 3:"KNN", 4:"Logistic Regression"}
         # output_map = {0:"0/1 classification", 1:"probability", 2:"regression"}
-        print(self.modelType.get())
+        
         if self.modelType.get() == 0:
             self.model = Model_SVM(self.model,self.parameter)
 
@@ -240,8 +428,16 @@ class Controller(object):
 
         elif self.modelType.get() == 3:
             self.model = Model_KNN(self.model,self.parameter)
-        self.model.fit()
-        self.model.score()
+
+        elif self.modelType.get() == 4:
+            self.model = Model_LR(self.model,self.parameter)
+
+        if float(self.parameter["CV_size"].get()) == 0:
+            self.model.fit()
+            self.model.score()
+
+        else:
+            self.model.crossValidation()
 
     def clear_data(self):
         self.model.data = []
@@ -270,16 +466,7 @@ class Controller(object):
 class View(object):
 
     def __init__(self, root, controller):
-        f = Figure()
         self.controllbar = ControllBar(root, controller)
-        # self.f = f
-        # self.controller = controller
-
-
-
-
-    def update(self, event, model):
-        self.canvas.draw()
 
 
 
@@ -310,6 +497,8 @@ class ControllBar(object):
                        value=2,command = controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="KNN(0/1)", variable=controller.modelType,
                        value=3,command = controller.showFrameHelper).pack(anchor=Tk.W)
+        Tk.Radiobutton(model_group, text="Logistic Regression(Reg)", variable=controller.modelType,
+                       value=4,command = controller.showFrameHelper).pack(anchor=Tk.W)
         model_group.pack(side=Tk.LEFT)
 
         # output_group = Tk.Frame(fm)
