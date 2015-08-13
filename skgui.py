@@ -43,6 +43,7 @@ from sklearn.metrics import f1_score
 from sklearn import metrics
 from sklearn.metrics import roc_auc_score
 
+import xgboost as xgb
 
 
 class Model(object):
@@ -119,7 +120,6 @@ class Model_Adaboost(object):
     def __init__(self,model,parameter = {"n_estimators" : 50, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
-        self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
         self.CVsize = float(parameter["CV_size"].get())
         train = np.array(self.train)
         self.X_train = train[:, :-1]
@@ -171,17 +171,16 @@ class Model_Adaboost(object):
         print ("Best [f1(neg),n_estimators] on Cross Validation set" + str(bestF1ScoreNeg))
 
 class Model_RF(object):
-    def __init__(self,model,parameter = {"n_estimators" :30, "max_depth" :5, "max_features":10, "CV_size": 0}):
+    def __init__(self,model,parameter = {"n_estimators" :10, "max_depth" :5, "max_features":10, "CV_size": 0}):
         self.train = model.train
         self.test = model.test
-        self.clf = RandomForestClassifier(max_depth= 5, n_estimators=30, max_features=min(10,model.train.shape[1] - 1))
         self.CVsize = float(parameter["CV_size"].get())
         train = np.array(self.train)
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
         self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
         if self.CVsize == 0:
-            self.clf = AdaBoostClassifier(n_estimators = int(parameter["n_estimators"].get()))
+            self.clf = RandomForestClassifier(n_estimators = int(parameter["n_estimators"].get()), max_features = parameter["max_features"].get(), max_depth = int(parameter["max_depth"].get()))
         self.model = model
     
     def fit(self):
@@ -195,31 +194,37 @@ class Model_RF(object):
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
 
     def crossValidation(self):
-        pass
-        # for  in CList:
-        #     self.clf = SVC(kernel="linear", C = C)
-        #     self.clf.fit(self.X_train,self.y_train)
-        #     pre = self.clf.predict(self.X_CV)
-        #     truth = self.y_CV
-        #     score = self.clf.score(self.X_CV,truth)
-        #     if score > bestScore[0]:
-        #         bestScore[0] = score
-        #         bestScore[1] = C
+        estimatorList = [10,50,100,200,500]
+        maxFeatList = ["sqrt","log2",None]
+        bestScore = [0,0,None]
+        bestF1ScoreNeg = [0,0,None]
+        bestF1ScorePos = [0,0,None]
+        for e in estimatorList:
+            for maxFeat in maxFeatList:
+                self.clf = RandomForestClassifier(n_estimators = e, max_features = maxFeat)
+                self.clf.fit(self.X_train,self.y_train)
+                pre = self.clf.predict(self.X_CV)
+                truth = self.y_CV
+                score = self.clf.score(self.X_CV,truth)
+                if score > bestScore[0]:
+                    bestScore[0] = score
+                    bestScore[1] = e
+                    bestScore[2] = maxFeat
+                f1pos = f1_score(truth,pre, average=None)[1]
+                if f1pos > bestF1ScorePos[0]:
+                    bestF1ScorePos[0] = f1pos
+                    bestF1ScorePos[1] = e
+                    bestF1ScorePos[2] = maxFeat
+                f1neg = f1_score(truth,pre, average=None)[0]
+                if f1neg > bestF1ScoreNeg[0]:
+                    bestF1ScoreNeg[0] = f1neg
+                    bestF1ScoreNeg[1] = e
+                    bestF1ScoreNeg[2] = maxFeat
 
-        #     f1pos = f1_score(truth,pre, average=None)[1]
-        #     if f1pos > bestF1ScorePos[0]:
-        #         bestF1ScorePos[0] = f1pos
-        #         bestF1ScorePos[1] = C
-
-        #     f1neg = f1_score(truth,pre, average=None)[0]
-        #     if f1neg > bestF1ScoreNeg[0]:
-        #         bestF1ScoreNeg[0] = f1neg
-        #         bestF1ScoreNeg[1] = C
-
-        # print ("For linear kernel:")
-        # print ("Best [score,C] on Cross Validation set: " + str(bestScore))
-        # print ("Best [f1(pos),C] on Cross Validation set: " + str(bestF1ScorePos))
-        # print ("Best [f1(neg),C] on Cross Validation set" + str(bestF1ScoreNeg))
+        print ("For linear kernel:")
+        print ("Best [score,n_estimators,max_features] on Cross Validation set: " + str(bestScore))
+        print ("Best [f1(pos),n_estimators,max_features] on Cross Validation set: " + str(bestF1ScorePos))
+        print ("Best [f1(neg),n_estimators,max_features] on Cross Validation set" + str(bestF1ScoreNeg))
 
 class Model_KNN(object):
     def __init__(self,model,parameter = {"K":5}):
@@ -342,13 +347,13 @@ class Controller(object):
     def showFrame(self):
         
         self.parameter["CV_size"] = Tk.StringVar()
+        self.param_group = Tk.Frame(self.frame)
         if self.modelType.get() == 0:
             
             self.parameter["kernel"] = Tk.StringVar()
             self.parameter["C"] = Tk.StringVar()
             self.parameter["gamma"] = Tk.StringVar()
             self.parameter["degree"] = Tk.StringVar()
-            self.param_group = Tk.Frame(self.frame)
             Tk.Radiobutton(self.param_group, text="linear", variable=self.parameter["kernel"],
                            value="linear").pack(anchor=Tk.W)
             Tk.Radiobutton(self.param_group, text="rbf", variable=self.parameter["kernel"],
@@ -366,7 +371,6 @@ class Controller(object):
         if self.modelType.get() == 1:
 
             self.parameter["n_estimators"] = Tk.StringVar()
-            self.param_group = Tk.Frame(self.frame)
             Tk.Label(self.param_group, text = "n_estimators").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["n_estimators"]).pack()
             
@@ -376,26 +380,27 @@ class Controller(object):
             self.parameter["n_estimators"] = Tk.StringVar()
             self.parameter["max_depth"] = Tk.StringVar()
             self.parameter["max_features"] = Tk.StringVar()
-            self.param_group = Tk.Frame(self.frame)
             Tk.Label(self.param_group, text = "n_estimators").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["n_estimators"]).pack()
             Tk.Label(self.param_group, text = "max_depth").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["max_depth"]).pack()
-            Tk.Label(self.param_group, text = "max_features").pack()
-            Tk.Entry(self.param_group, textvariable = self.parameter["max_features"]).pack()
+            maxFeat_group = Tk.Frame(self.param_group)
+            Tk.Label(maxFeat_group, text = "max_features").pack()
+            Tk.Radiobutton(maxFeat_group, text="sqrt", variable=self.parameter["max_features"],
+                           value="sqrt").pack(side = Tk.LEFT)
+            Tk.Radiobutton(maxFeat_group, text="log2", variable=self.parameter["max_features"],
+                           value="log2").pack(side = Tk.LEFT)
+            maxFeat_group.pack()
             
 
         if self.modelType.get() == 3:
             self.parameter["K"] = Tk.StringVar()
-            self.param_group = Tk.Frame(self.frame)
-            
             Tk.Label(self.param_group, text = "K").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["K"]).pack()
 
         if self.modelType.get() == 4:
             self.parameter["C"] = Tk.StringVar()
             self.parameter["multi"] = Tk.StringVar()
-            self.param_group = Tk.Frame(self.frame)
             Tk.Radiobutton(self.param_group, text="one vs all", variable=self.parameter["multi"],
                            value="ovr").pack(anchor=Tk.W)
             Tk.Radiobutton(self.param_group, text="multinomial", variable=self.parameter["multi"],
@@ -403,7 +408,26 @@ class Controller(object):
             
             Tk.Label(self.param_group, text = "C").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["C"]).pack()
-        
+
+        if self.modelType.get() == 5:
+            self.parameter["max_depth"] = Tk.StringVar()
+            self.parameter["eta"] = Tk.StringVar()
+            self.parameter["silent"] = Tk.StringVar()
+            self.parameter["objective"] = Tk.StringVar()
+            Tk.Label(self.param_group, text = "objective").pack()
+            Tk.Radiobutton(self.param_group, text="multi:softmax", variable=self.parameter["objective"],
+                           value="multi:softmax").pack(anchor=Tk.W)
+            Tk.Radiobutton(self.param_group, text="reg:logistic", variable=self.parameter["objective"],
+                           value="reg:logistic").pack(anchor=Tk.W)
+            Tk.Radiobutton(self.param_group, text="binary:logistic", variable=self.parameter["objective"],
+                           value="binary:logistic").pack(anchor=Tk.W)
+            Tk.Label(self.param_group, text = "max_depth").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["max_depth"]).pack()
+            Tk.Label(self.param_group, text = "eta").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["eta"]).pack()
+
+
+
         Tk.Label(self.param_group, text = "Cross Validation Size").pack()
         Tk.Label(self.param_group, text = "Set it to 0 if no need").pack()
         cvSizeEntry = Tk.Entry(self.param_group, textvariable = self.parameter["CV_size"])
@@ -414,8 +438,7 @@ class Controller(object):
 
 
     def fit(self):
-        model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest", 3:"KNN", 4:"Logistic Regression"}
-        # output_map = {0:"0/1 classification", 1:"probability", 2:"regression"}
+        model_map = {0:"SVM", 1:"Adaboost", 2:"Random Forest", 3:"KNN", 4:"Logistic Regression", 5:"Xgboost"}
         
         if self.modelType.get() == 0:
             self.model = Model_SVM(self.model,self.parameter)
@@ -487,7 +510,7 @@ class ControllBar(object):
 
         model_group = Tk.Frame(fm)
         # self.box = ttk.Combobox(model_group, textvariable = Tk.StringVar(), values = ["SVM","Adaboost"])
-        # self.box.bind("SVM",controller.showFrame)
+        # self.box.bind("SVM",controller.showFrameHelper)
         # self.box.pack()
         Tk.Radiobutton(model_group, text="SVM(0/1)", variable=controller.modelType,
                        value=0,command = controller.showFrameHelper).pack(anchor=Tk.W)
@@ -499,16 +522,10 @@ class ControllBar(object):
                        value=3,command = controller.showFrameHelper).pack(anchor=Tk.W)
         Tk.Radiobutton(model_group, text="Logistic Regression(Reg)", variable=controller.modelType,
                        value=4,command = controller.showFrameHelper).pack(anchor=Tk.W)
+        Tk.Radiobutton(model_group, text="Xgboost", variable=controller.modelType,
+                       value=5,command = controller.showFrameHelper).pack(anchor=Tk.W)
         model_group.pack(side=Tk.LEFT)
 
-        # output_group = Tk.Frame(fm)
-        # Tk.Radiobutton(output_group, text="0/1 classification",
-        #                variable=controller.model.output, value=0).pack(anchor=Tk.W)
-        # Tk.Radiobutton(output_group, text="Probability",
-        #                variable=controller.model.output, value=1).pack(anchor=Tk.W)
-        # Tk.Radiobutton(output_group, text="Regression",
-        #                variable=controller.model.output, value=2).pack(anchor=Tk.W)
-        # output_group.pack(side=Tk.LEFT)
         output_group = Tk.Frame(fm)
         Tk.Button(output_group, text='Fit', width=5, command=controller.fit).pack()
         Tk.Button(output_group, text='Save Results', width=10, command=controller.save_results).pack()
