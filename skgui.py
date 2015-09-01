@@ -221,7 +221,6 @@ class Model_RF(object):
                     bestF1ScoreNeg[1] = e
                     bestF1ScoreNeg[2] = maxFeat
 
-        print ("For linear kernel:")
         print ("Best [score,n_estimators,max_features] on Cross Validation set: " + str(bestScore))
         print ("Best [f1(pos),n_estimators,max_features] on Cross Validation set: " + str(bestF1ScorePos))
         print ("Best [f1(neg),n_estimators,max_features] on Cross Validation set" + str(bestF1ScoreNeg))
@@ -327,6 +326,36 @@ class Model_LR(object):
                 bestScore[1] = C
         print ("Best [score,C] on Cross Validation set: " + str(bestScore))
 
+class Model_xgb(object):
+    def __init__(self,model,parameter = {"objective" : "multi:softmax", "bst:max_depth": 5, "bst:eta": 1, "silent":1,"nthread":4}):
+        self.train = model.train
+        self.test = model.test
+        self.CVsize = float(parameter["CV_size"].get())
+        train = np.array(self.train)
+        self.X_train = train[:, :-1]
+        self.y_train = train[:, -1]
+        self.multi = parameter["multi"].get()
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        
+        self.model = model
+
+        self.dtrain = xgb.DMatrix(X_train, label = y_train)
+        self.evallist = xgb.DMatrix(X_CV, label = y_CV)
+        # for sparse matrix
+        # csr = scipy.sparse.csr_matrix((dat, (row, col)))
+        # dtrain = xgb.DMatrix(csr)
+        # for missing value or weight, parameter in DMatrix()
+        self.plst = param.items()
+
+    def fit(self):
+        pass
+
+    def score(self):
+        pass
+
+    def crossValidation(self):
+        pass
+
 class Controller(object):
     def __init__(self, model):
         self.model = model
@@ -425,7 +454,7 @@ class Controller(object):
             Tk.Entry(self.param_group, textvariable = self.parameter["max_depth"]).pack()
             Tk.Label(self.param_group, text = "eta").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["eta"]).pack()
-
+            
 
 
         Tk.Label(self.param_group, text = "Cross Validation Size").pack()
