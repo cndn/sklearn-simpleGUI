@@ -82,6 +82,12 @@ class Model_SVM(object):
         print ("f1 on training set: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score on training set: " + str(roc_auc_score(truth,pre)))
 
+    def save_results(self):
+        pre = self.model.clf.predict(self.model.test)
+        df = pd.DataFrame({"predict":pre})
+        fileName = tkFileDialog.asksaveasfilename()
+        df.to_csv(fileName)
+
     def crossValidation(self):
         CList = [0.01,0.1,1,2,5,10]
         gammaList = [0,0.1,0.5,1,2,5,10]
@@ -139,6 +145,12 @@ class Model_Adaboost(object):
         print ("f1: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
 
+    def save_results(self):
+        pre = self.model.clf.predict(self.model.test)
+        df = pd.DataFrame({"predict":pre})
+        fileName = tkFileDialog.asksaveasfilename()
+        df.to_csv(fileName)
+
     def crossValidation(self):
         estimatorList = [3,5,7,10,13,15,20,25,30,50]
         bestScore = [0,0] #score,n_estimator
@@ -192,6 +204,12 @@ class Model_RF(object):
         print ("score: " + str(self.clf.score(self.X_train,truth)))
         print ("f1: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
+
+    def save_results(self):
+        pre = self.model.clf.predict(self.model.test)
+        df = pd.DataFrame({"predict":pre})
+        fileName = tkFileDialog.asksaveasfilename()
+        df.to_csv(fileName)
 
     def crossValidation(self):
         estimatorList = [10,50,100,200,500]
@@ -248,6 +266,12 @@ class Model_KNN(object):
         print ("score: " + str(self.clf.score(self.X_train,truth)))
         print ("f1: " + str(f1_score(truth,pre, average=None)))
         print ("AUC score: " + str(roc_auc_score(truth,pre)))
+
+    def save_results(self):
+        pre = self.model.clf.predict(self.model.test)
+        df = pd.DataFrame({"predict":pre})
+        fileName = tkFileDialog.asksaveasfilename()
+        df.to_csv(fileName)
 
     def crossValidation(self):
         kList = [1,2,4,8,16,32,64,128,256]
@@ -308,6 +332,12 @@ class Model_LR(object):
         truth = self.y_train
         print ("score: " + str(self.clf.score(self.X_train,truth)))
 
+    def save_results(self):
+        pre = self.model.clf.predict(self.model.test)
+        df = pd.DataFrame({"predict":pre})
+        fileName = tkFileDialog.asksaveasfilename()
+        df.to_csv(fileName)
+
     def crossValidation(self):
         CList = [0.01,0.05,0.1,0.5,1.0,2.0,5.0,10.0]
         bestScore = [0,0] #score,C
@@ -331,27 +361,42 @@ class Model_xgb(object):
         self.train = model.train
         self.test = model.test
         self.CVsize = float(parameter["CV_size"].get())
+        if self.CVsize == 0:
+            self.CVsize = 0.2
+        self.num_round = int(parameter["num_round"].get())
         train = np.array(self.train)
+
         self.X_train = train[:, :-1]
         self.y_train = train[:, -1]
-        self.multi = parameter["multi"].get()
-        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size=self.CVsize)
+        self.X_train,self.X_CV,self.y_train,self.y_CV = train_test_split(self.X_train, self.y_train, test_size = self.CVsize)
         
         self.model = model
 
-        self.dtrain = xgb.DMatrix(X_train, label = y_train)
-        self.evallist = xgb.DMatrix(X_CV, label = y_CV)
+        self.dtrain = xgb.DMatrix(self.X_train, label = self.y_train)
+        self.dtest = xgb.DMatrix(np.array(self.test))
+        self.dCV = xgb.DMatrix(self.X_CV, label = self.y_CV)
+        
+        self.evallist = [(self.dCV,'eval'), (self.dtrain,'train')]
         # for sparse matrix
         # csr = scipy.sparse.csr_matrix((dat, (row, col)))
         # dtrain = xgb.DMatrix(csr)
         # for missing value or weight, parameter in DMatrix()
-        self.plst = param.items()
+        self.plst = []
+        for param in parameter:
+            self.plst.append((param,parameter[param].get()))
 
     def fit(self):
-        pass
+        self.bst = xgb.train(self.plst, self.dtrain, self.num_round, self.evallist)
 
     def score(self):
         pass
+
+    def save_results(self):
+
+        pre = self.bst.predict(self.dtest)
+        df = pd.DataFrame({"predict":pre})
+        fileName = tkFileDialog.asksaveasfilename()
+        df.to_csv(fileName)
 
     def crossValidation(self):
         pass
@@ -443,6 +488,7 @@ class Controller(object):
             self.parameter["eta"] = Tk.StringVar()
             self.parameter["silent"] = Tk.StringVar()
             self.parameter["objective"] = Tk.StringVar()
+            self.parameter["num_round"] = Tk.StringVar()
             Tk.Label(self.param_group, text = "objective").pack()
             Tk.Radiobutton(self.param_group, text="multi:softmax", variable=self.parameter["objective"],
                            value="multi:softmax").pack(anchor=Tk.W)
@@ -454,8 +500,10 @@ class Controller(object):
             Tk.Entry(self.param_group, textvariable = self.parameter["max_depth"]).pack()
             Tk.Label(self.param_group, text = "eta").pack()
             Tk.Entry(self.param_group, textvariable = self.parameter["eta"]).pack()
-            
-
+            Tk.Label(self.param_group, text = "num_round").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["num_round"]).pack()
+            Tk.Label(self.param_group, text = "silent").pack()
+            Tk.Entry(self.param_group, textvariable = self.parameter["silent"]).pack()
 
         Tk.Label(self.param_group, text = "Cross Validation Size").pack()
         Tk.Label(self.param_group, text = "Set it to 0 if no need").pack()
@@ -484,6 +532,9 @@ class Controller(object):
         elif self.modelType.get() == 4:
             self.model = Model_LR(self.model,self.parameter)
 
+        elif self.modelType.get() == 5:
+            self.model = Model_xgb(self.model,self.parameter)
+
         if float(self.parameter["CV_size"].get()) == 0:
             self.model.fit()
             self.model.score()
@@ -491,17 +542,13 @@ class Controller(object):
         else:
             self.model.crossValidation()
 
-    def clear_data(self):
-        self.model.data = []
-        self.fitted = False
-        self.model.changed("clear")
 
     def save_results(self):
-
-        pre = self.model.clf.predict(self.model.test)
-        df = pd.DataFrame({"predict":pre})
-        fileName = tkFileDialog.asksaveasfilename()
-        df.to_csv(fileName)
+        self.model.save_results()
+        # pre = self.model.clf.predict(self.model.test)
+        # df = pd.DataFrame({"predict":pre})
+        # fileName = tkFileDialog.asksaveasfilename()
+        # df.to_csv(fileName)
 
     def loadTrainData(self):
         fileName = tkFileDialog.askopenfilename()
